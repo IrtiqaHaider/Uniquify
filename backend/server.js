@@ -196,51 +196,58 @@ const processAndRespond = async (processedData, fileType, res) => {
 
     console.log('Filtered Data: ' , filteredData)
 
-    try {
-      const uploadDir = path.join(__dirname, 'uploads');
-      
-      // Check if 'uploads' directory exists, if not create it
-      if (!fs.existsSync(uploadDir)) {
-          fs.mkdirSync(uploadDir, { recursive: true }); // Use recursive to create all missing parent directories
-      }
-  
-      if (fileType === 'csv') {
-          console.log('its csv');
-          const newCsvFile = Papa.unparse(filteredData.map(id => [id]));
-          
-          // Correct file path
-          const filePath = path.join(uploadDir, 'processed_file.csv');
-          
-          // Write the CSV file
-          fs.writeFileSync(filePath, newCsvFile);
-          console.log('Write file Sync');
-          console.log('Returning ...');
-          
-          // Return response with the path to the file
-          res.status(200).json({ message, file: `/uploads/processed_file.csv` });
-      } else if (fileType === 'excel') {
-          console.log('its excel');
-          
-          const newSheet = XLSX.utils.aoa_to_sheet(filteredData.map(id => [id]));
-          const newWorkbook = XLSX.utils.book_new();
-          XLSX.utils.book_append_sheet(newWorkbook, newSheet, 'ProcessedData');
-          const newExcelFile = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'buffer' });
-          
-          // Correct file path
-          const filePath = path.join(uploadDir, 'processed_file.xlsx');
-          
-          // Write the Excel file
-          fs.writeFileSync(filePath, newExcelFile);
-          console.log('Write file Sync');
-          console.log('Returning ...');
-          
-          // Return response with the path to the file
-          res.status(200).json({ message, file: `/uploads/processed_file.xlsx` });
-      }
-  } catch (error) {
-      console.error('Error writing file:', error);
-      res.status(500).json({ message: 'Error writing the file.' });
+    if (filteredData.length === 0) {
+      return res.status(400).json({ message: 'No data to process.' });
   }
+  
+
+  try {
+    const uploadDir = path.join(__dirname, 'uploads');
+
+    // Check if 'uploads' directory exists, if not create it
+    if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true }); // Use recursive to create all missing parent directories
+    }
+
+    // Ensure filteredData is not empty
+    if (filteredData.length === 0) {
+        return res.status(400).json({ message: 'No valid data to process.' });
+    }
+
+    if (fileType === 'csv') {
+        console.log('its csv');
+        
+        const newCsvFile = Papa.unparse(filteredData.map(id => [id]));
+        const filePath = path.join(uploadDir, 'processed_file.csv');
+        
+        // Write the CSV file
+        fs.writeFileSync(filePath, newCsvFile);
+        console.log('File written successfully');
+        
+        // Return response with the path to the file
+        res.status(200).json({ message: 'File processed successfully.', file: `/uploads/processed_file.csv` });
+    } else if (fileType === 'excel') {
+        console.log('its excel');
+        
+        const newSheet = XLSX.utils.aoa_to_sheet(filteredData.map(id => [id]));
+        const newWorkbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(newWorkbook, newSheet, 'ProcessedData');
+        const newExcelFile = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'buffer' });
+        
+        const filePath = path.join(uploadDir, 'processed_file.xlsx');
+        
+        // Write the Excel file
+        fs.writeFileSync(filePath, newExcelFile);
+        console.log('File written successfully');
+        
+        // Return response with the path to the file
+        res.status(200).json({ message: 'File processed successfully.', file: `/uploads/processed_file.xlsx` });
+    }
+} catch (error) {
+    console.error('Error writing file:', error.message || error);
+    res.status(500).json({ message: 'Error processing the file.' });
+}
+
   
   } catch (err) {
     console.error('Error querying DynamoDB:', err);
