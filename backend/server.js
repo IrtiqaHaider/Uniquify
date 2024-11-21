@@ -233,7 +233,7 @@ const processAndRespond = async (processedData, fileType, res) => {
         console.log('File written successfully');
         
         // Return response with the path to the file
-        res.status(200).json({ message: 'File processed successfully.', file: filePath });
+        res.status(200).json({ message: 'File processed successfully.', file: `/uploads/processed_file.csv` });
     } else if (fileType === 'excel') {
         console.log('its excel');
         
@@ -250,7 +250,7 @@ const processAndRespond = async (processedData, fileType, res) => {
         console.log('File written successfully');
         
         // Return response with the path to the file
-        res.status(200).json({ message: 'File processed successfully.', file: filePath });
+        res.status(200).json({ message: 'File processed successfully.', file: `/uploads/processed_file.xlsx` });
     }
 } catch (error) {
     console.error('Error writing file:', error.message || error);
