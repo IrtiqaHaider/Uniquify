@@ -51,24 +51,33 @@ const FileUpload: React.FC = () => {
     }
   };
 
-  // Handle file download
-  const handleDownload = () => {
+  const handleDownload = async () => {
+    console.log("file path: ", filePath);
     if (filePath) {
       const downloadUrl = `https://uniquify-backend.onrender.com${filePath}`;
       console.log("Download link: ", downloadUrl);
 
-      const link = document.createElement("a");
-      link.href = downloadUrl;
+      // Fetch the file as a Blob
+      try {
+        const response = await fetch(downloadUrl);
+        if (response.ok) {
+          const blob = await response.blob();
+          const fileName = filePath.split("/").pop() || "processed_file.csv";
 
-      // Extract the file name from the filePath and set it as the 'download' attribute
-      const fileName = filePath.split("/").pop() || "processed_file.csv";
-      console.log("Filename: ", fileName);
-      link.setAttribute("download", fileName);
-
-      // Trigger the download by simulating a click on the link
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link); // Clean up the DOM after download
+          // Create a link element
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.setAttribute("download", fileName);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setFilePath("\0");
+        } else {
+          console.error("Failed to fetch the file");
+        }
+      } catch (error) {
+        console.error("Error downloading the file:", error);
+      }
     }
   };
 
