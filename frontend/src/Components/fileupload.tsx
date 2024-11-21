@@ -38,8 +38,8 @@ const FileUpload: React.FC = () => {
 
         if (filePath) {
           // Correctly construct the download URL from the backend file path
-          //   const downloadUrl = `https://uniquify-backend.onrender.com${filePath}`;
-          const downloadUrl = filePath;
+          const downloadUrl = `https://uniquify-backend.onrender.com${filePath}`;
+          //const downloadUrl = filePath;
           // Use the Blob method to handle file download for the client-side
           const link = document.createElement("a");
 
