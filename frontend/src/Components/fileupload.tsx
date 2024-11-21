@@ -18,14 +18,15 @@ const FileUpload: React.FC = () => {
       try {
         // Send the file to the backend for processing
         const response = await axios.post(
-          "http://localhost:5000/upload",
-          formData,
-          {
-            headers: {
-              "Content-Type": "multipart/form-data",
-            },
-          }
-        );
+            "https://uniquify-backend.onrender.com/upload", // Use the live backend URL
+            formData,
+            {
+              headers: {
+                "Content-Type": "multipart/form-data",
+              },
+            }
+          );
+          
 
         // Extract response data
         const { message, file: filePath } = response.data;
