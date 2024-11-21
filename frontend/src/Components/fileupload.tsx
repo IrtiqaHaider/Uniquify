@@ -37,32 +37,23 @@ const FileUpload: React.FC = () => {
         setMessage(message);
 
         if (filePath) {
-          //   // Assuming the server is running on http://localhost:5000
-          //   const downloadUrl = `http://localhost:5000${filePath}`;
-
-          //   // Use the Blob method to handle file download for the client-side
-          //   const link = document.createElement("a");
-          //   link.href = downloadUrl;
-          //   link.setAttribute(
-          //     "download",
-          //     filePath.split("/").pop() || "processed_file.xlsx"
-          //   );
-          //   document.body.appendChild(link);
-          //   link.click();
-          //   link.remove();
-
+          // Correctly construct the download URL from the backend file path
           const downloadUrl = `https://uniquify-backend.onrender.com${filePath}`;
 
           // Use the Blob method to handle file download for the client-side
           const link = document.createElement("a");
+
+          // Set the href to the download URL
           link.href = downloadUrl;
-          link.setAttribute(
-            "download",
-            filePath.split("/").pop() || "processed_file.xlsx"
-          );
+
+          // Extract the file name from the filePath and set it as the 'download' attribute
+          const fileName = filePath.split("/").pop() || "processed_file.xlsx"; // Default to "processed_file.xlsx" if the file name is missing
+          link.setAttribute("download", fileName);
+
+          // Append the link to the body, trigger a click to download the file, then remove it
           document.body.appendChild(link);
           link.click();
-          link.remove();
+          document.body.removeChild(link); // Remove the link after the download
         }
 
         // setTimeout(() => {
