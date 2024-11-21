@@ -197,21 +197,36 @@ const processAndRespond = async (processedData, fileType, res) => {
     console.log('Filtered Data: ' , filteredData)
 
     try {
+
+      const uploadDir = path.join(__dirname, 'uploads');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir);
+      }
+
+
       if (fileType === 'csv') {
+
+        console.log('its csv')
         const newCsvFile = Papa.unparse(filteredData.map(id => [id]));
-        const filePath = path.join(__dirname, 'uploads', 'processed_file.csv');
+        const filePath = path.join(__dirname, uploadDir, 'processed_file.csv');
         fs.writeFileSync(filePath, newCsvFile);
+        console.log('Write file Sync')
+        console.log('Returning ...')
+
     
         res.status(200).json({ message, file: `/uploads/processed_file.csv` });
       } else if (fileType === 'excel') {
+        console.log('its excel')
+
         const newSheet = XLSX.utils.aoa_to_sheet(filteredData.map(id => [id]));
         const newWorkbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(newWorkbook, newSheet, 'ProcessedData');
         const newExcelFile = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'buffer' });
     
-        const filePath = path.join(__dirname, 'uploads', 'processed_file.xlsx');
+        const filePath = path.join(__dirname, uploadDir, 'processed_file.xlsx');
         fs.writeFileSync(filePath, newExcelFile);
-    
+        console.log('Write file Sync')
+        console.log('Returning ...')
         res.status(200).json({ message, file: `/uploads/processed_file.xlsx` });
       }
     } catch (error) {
