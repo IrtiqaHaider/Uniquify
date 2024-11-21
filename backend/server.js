@@ -227,13 +227,13 @@ const processAndRespond = async (processedData, fileType, res) => {
         
         const newCsvFile = Papa.unparse(filteredData.map(id => [id]));
         const filePath = path.join(uploadDir, 'processed_file.csv');
-        
+        console.log('File path: ', filePath)
         // Write the CSV file
         fs.writeFileSync(filePath, newCsvFile);
         console.log('File written successfully');
         
         // Return response with the path to the file
-        res.status(200).json({ message: 'File processed successfully.', file: `/uploads/processed_file.csv` });
+        res.status(200).json({ message: 'File processed successfully.', file: filePath });
     } else if (fileType === 'excel') {
         console.log('its excel');
         
@@ -243,13 +243,14 @@ const processAndRespond = async (processedData, fileType, res) => {
         const newExcelFile = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'buffer' });
         
         const filePath = path.join(uploadDir, 'processed_file.xlsx');
+        console.log('File path: ', filePath)
         
         // Write the Excel file
         fs.writeFileSync(filePath, newExcelFile);
         console.log('File written successfully');
         
         // Return response with the path to the file
-        res.status(200).json({ message: 'File processed successfully.', file: `/uploads/processed_file.xlsx` });
+        res.status(200).json({ message: 'File processed successfully.', file: filePath });
     }
 } catch (error) {
     console.error('Error writing file:', error.message || error);
