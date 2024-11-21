@@ -13,7 +13,7 @@ const upload = multer({ storage: storage });
 const app = express();
 const port = 5000;
 
-app.use(cors()); 
+app.use(cors({ origin: 'https://uniquify-uqvj.onrender.com/' })); 
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
