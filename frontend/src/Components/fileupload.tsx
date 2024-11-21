@@ -65,9 +65,9 @@ const FileUpload: React.FC = () => {
           link.remove();
         }
 
-        setTimeout(() => {
-          window.location.reload(); // Refresh the page
-        }, 3000);
+        // setTimeout(() => {
+        //   window.location.reload(); // Refresh the page
+        // }, 3000);
       } catch (error: any) {
         console.error("Error during file upload:", error);
 
