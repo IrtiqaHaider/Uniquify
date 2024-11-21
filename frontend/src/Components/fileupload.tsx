@@ -18,15 +18,14 @@ const FileUpload: React.FC = () => {
       try {
         // Send the file to the backend for processing
         const response = await axios.post(
-            "https://uniquify-backend.onrender.com/upload", // Use the live backend URL
-            formData,
-            {
-              headers: {
-                "Content-Type": "multipart/form-data",
-              },
-            }
-          );
-          
+          "https://uniquify-backend.onrender.com/upload", // Use the live backend URL
+          formData,
+          {
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+          }
+        );
 
         // Extract response data
         const { message, file: filePath } = response.data;
@@ -38,8 +37,21 @@ const FileUpload: React.FC = () => {
         setMessage(message);
 
         if (filePath) {
-          // Assuming the server is running on http://localhost:5000
-          const downloadUrl = `http://localhost:5000${filePath}`;
+          //   // Assuming the server is running on http://localhost:5000
+          //   const downloadUrl = `http://localhost:5000${filePath}`;
+
+          //   // Use the Blob method to handle file download for the client-side
+          //   const link = document.createElement("a");
+          //   link.href = downloadUrl;
+          //   link.setAttribute(
+          //     "download",
+          //     filePath.split("/").pop() || "processed_file.xlsx"
+          //   );
+          //   document.body.appendChild(link);
+          //   link.click();
+          //   link.remove();
+
+          const downloadUrl = `https://uniquify-backend.onrender.com${filePath}`;
 
           // Use the Blob method to handle file download for the client-side
           const link = document.createElement("a");
