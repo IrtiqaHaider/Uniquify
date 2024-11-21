@@ -5,6 +5,7 @@ const FileUpload: React.FC = () => {
   const [fileName, setFileName] = useState<string>("");
   const [message, setMessage] = useState<string>("");
   const [processing, setProcessing] = useState<boolean>(false);
+  const [filePath, setFilePath] = useState<string>("");
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -35,33 +36,7 @@ const FileUpload: React.FC = () => {
 
         // Update the frontend message
         setMessage(message);
-
-        if (filePath) {
-          // Correctly construct the download URL from the backend file path
-          const downloadUrl = `https://uniquify-backend.onrender.com${filePath}`;
-          console.log("Download link: ", downloadUrl);
-          //const downloadUrl = filePath;
-          // Use the Blob method to handle file download for the client-side
-          const link = document.createElement("a");
-
-          // Set the href to the download URL
-          link.href = downloadUrl;
-
-          // Extract the file name from the filePath and set it as the 'download' attribute
-
-          const fileName = filePath.split("/").pop() || "processed_file.csv"; // Default to "processed_file.xlsx" if the file name is missing
-          console.log("Filename: ", fileName);
-          link.setAttribute("download", fileName);
-
-          // Append the link to the body, trigger a click to download the file, then remove it
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link); // Remove the link after the download
-        }
-
-        // setTimeout(() => {
-        //   window.location.reload(); // Refresh the page
-        // }, 3000);
+        setFilePath(filePath);
       } catch (error: any) {
         console.error("Error during file upload:", error);
 
@@ -73,6 +48,27 @@ const FileUpload: React.FC = () => {
       } finally {
         setProcessing(false);
       }
+    }
+  };
+
+  // Handle file download
+  const handleDownload = () => {
+    if (filePath) {
+      const downloadUrl = `https://uniquify-backend.onrender.com${filePath}`;
+      console.log("Download link: ", downloadUrl);
+
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+
+      // Extract the file name from the filePath and set it as the 'download' attribute
+      const fileName = filePath.split("/").pop() || "processed_file.csv";
+      console.log("Filename: ", fileName);
+      link.setAttribute("download", fileName);
+
+      // Trigger the download by simulating a click on the link
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link); // Clean up the DOM after download
     }
   };
 
@@ -105,6 +101,15 @@ const FileUpload: React.FC = () => {
             </h5>
           )}
         </div>
+
+        {/* Conditional rendering of download button */}
+        {filePath && !processing && !message.includes("Error") && (
+          <div className="mt-4">
+            <button className="btn btn-success btn-lg" onClick={handleDownload}>
+              Download Processed File
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
