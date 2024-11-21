@@ -37,6 +37,12 @@ const FileUpload: React.FC = () => {
         // Update the frontend message
         setMessage(message);
         setFilePath(filePath);
+
+        if (!filePath) {
+          setTimeout(() => {
+            window.location.reload();
+          }, 3000); // Adjust the time as needed
+        }
       } catch (error: any) {
         console.error("Error during file upload:", error);
 
@@ -72,6 +78,9 @@ const FileUpload: React.FC = () => {
           link.click();
           document.body.removeChild(link);
           setFilePath("\0");
+          setTimeout(() => {
+            window.location.reload();
+          }, 3000); // Adjust the time as needed
         } else {
           console.error("Failed to fetch the file");
         }
