@@ -13,9 +13,17 @@ const upload = multer({ storage: storage });
 const app = express();
 const port = 5000;
 
-app.use(cors({ origin: 'https://uniquify-uqvj.onrender.com/' })); 
+const corsOptions = {
+  origin: 'https://uniquify-uqvj.onrender.com/', // Frontend URL
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type'],
+};
+
+app.use(cors(corsOptions)); // Apply CORS middleware
+
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 
 // Set up AWS DynamoDB SDK configuration
 AWS.config.update({
