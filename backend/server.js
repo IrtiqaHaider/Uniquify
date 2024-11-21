@@ -197,42 +197,51 @@ const processAndRespond = async (processedData, fileType, res) => {
     console.log('Filtered Data: ' , filteredData)
 
     try {
-
       const uploadDir = path.join(__dirname, 'uploads');
+      
+      // Check if 'uploads' directory exists, if not create it
       if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir);
+          fs.mkdirSync(uploadDir, { recursive: true }); // Use recursive to create all missing parent directories
       }
-
-
+  
       if (fileType === 'csv') {
-
-        console.log('its csv')
-        const newCsvFile = Papa.unparse(filteredData.map(id => [id]));
-        const filePath = path.join(__dirname, uploadDir, 'processed_file.csv');
-        fs.writeFileSync(filePath, newCsvFile);
-        console.log('Write file Sync')
-        console.log('Returning ...')
-
-    
-        res.status(200).json({ message, file: `/uploads/processed_file.csv` });
+          console.log('its csv');
+          const newCsvFile = Papa.unparse(filteredData.map(id => [id]));
+          
+          // Correct file path
+          const filePath = path.join(uploadDir, 'processed_file.csv');
+          
+          // Write the CSV file
+          fs.writeFileSync(filePath, newCsvFile);
+          console.log('Write file Sync');
+          console.log('Returning ...');
+          
+          // Return response with the path to the file
+          res.status(200).json({ message, file: `/uploads/processed_file.csv` });
       } else if (fileType === 'excel') {
-        console.log('its excel')
-
-        const newSheet = XLSX.utils.aoa_to_sheet(filteredData.map(id => [id]));
-        const newWorkbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(newWorkbook, newSheet, 'ProcessedData');
-        const newExcelFile = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'buffer' });
-    
-        const filePath = path.join(__dirname, uploadDir, 'processed_file.xlsx');
-        fs.writeFileSync(filePath, newExcelFile);
-        console.log('Write file Sync')
-        console.log('Returning ...')
-        res.status(200).json({ message, file: `/uploads/processed_file.xlsx` });
+          console.log('its excel');
+          
+          const newSheet = XLSX.utils.aoa_to_sheet(filteredData.map(id => [id]));
+          const newWorkbook = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(newWorkbook, newSheet, 'ProcessedData');
+          const newExcelFile = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'buffer' });
+          
+          // Correct file path
+          const filePath = path.join(uploadDir, 'processed_file.xlsx');
+          
+          // Write the Excel file
+          fs.writeFileSync(filePath, newExcelFile);
+          console.log('Write file Sync');
+          console.log('Returning ...');
+          
+          // Return response with the path to the file
+          res.status(200).json({ message, file: `/uploads/processed_file.xlsx` });
       }
-    } catch (error) {
+  } catch (error) {
       console.error('Error writing file:', error);
-      res.status(500).json({ message: 'Error generating file', error: error.message });
-    }
+      res.status(500).json({ message: 'Error processing the file.' });
+  }
+  
   } catch (err) {
     console.error('Error querying DynamoDB:', err);
     return res.status(500).json({ message: 'Error processing file.', file: null });
