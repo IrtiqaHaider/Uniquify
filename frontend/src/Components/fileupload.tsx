@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
+const path = require("path");
 
 const FileUpload: React.FC = () => {
   const [fileName, setFileName] = useState<string>("");
@@ -39,6 +40,7 @@ const FileUpload: React.FC = () => {
         if (filePath) {
           // Correctly construct the download URL from the backend file path
           const downloadUrl = `https://uniquify-backend.onrender.com${filePath}`;
+          console.log("Download link: ", downloadUrl);
           //const downloadUrl = filePath;
           // Use the Blob method to handle file download for the client-side
           const link = document.createElement("a");
@@ -47,7 +49,8 @@ const FileUpload: React.FC = () => {
           link.href = downloadUrl;
 
           // Extract the file name from the filePath and set it as the 'download' attribute
-          const fileName = filePath.split("/").pop() || "processed_file.csv"; // Default to "processed_file.xlsx" if the file name is missing
+          const fileName = path.basename(filePath) || "processed_file.csv";
+          //const fileName = filePath.split("/").pop() || "processed_file.csv"; // Default to "processed_file.xlsx" if the file name is missing
           link.setAttribute("download", fileName);
 
           // Append the link to the body, trigger a click to download the file, then remove it
