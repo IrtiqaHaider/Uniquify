@@ -239,7 +239,7 @@ const processAndRespond = async (processedData, fileType, res) => {
       }
   } catch (error) {
       console.error('Error writing file:', error);
-      res.status(500).json({ message: 'Error processing the file.' });
+      res.status(500).json({ message: 'Error writing the file.' });
   }
   
   } catch (err) {
