@@ -140,7 +140,7 @@ const processAndRespond = async (processedData, fileType, res) => {
     try {
       console.log('Scanning DynamoDB...');
       existingIds = await dynamoDb.scan(params).promise();
-      console.log('Scan Result:', JSON.stringify(existingIds, null, 2));
+      //console.log('Scan Result:', JSON.stringify(existingIds, null, 2));
     } catch (err) {
       console.error('Error during scan:', err);
       return;
@@ -196,23 +196,27 @@ const processAndRespond = async (processedData, fileType, res) => {
 
     console.log('Filtered Data: ' , filteredData)
 
-    // Handle file generation for filtered data
-    if (fileType === 'csv') {
-      const newCsvFile = Papa.unparse(filteredData.map(id => [id]));
-      const filePath = path.join(__dirname, 'uploads', 'processed_file.csv');
-      fs.writeFileSync(filePath, newCsvFile);
-
-      res.status(200).json({ message, file: `/uploads/processed_file.csv` });
-    } else if (fileType === 'excel') {
-      const newSheet = XLSX.utils.aoa_to_sheet(filteredData.map(id => [id]));
-      const newWorkbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(newWorkbook, newSheet, 'ProcessedData');
-      const newExcelFile = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'buffer' });
-
-      const filePath = path.join(__dirname, 'uploads', 'processed_file.xlsx');
-      fs.writeFileSync(filePath, newExcelFile);
-
-      res.status(200).json({ message, file: `/uploads/processed_file.xlsx` });
+    try {
+      if (fileType === 'csv') {
+        const newCsvFile = Papa.unparse(filteredData.map(id => [id]));
+        const filePath = path.join(__dirname, 'uploads', 'processed_file.csv');
+        fs.writeFileSync(filePath, newCsvFile);
+    
+        res.status(200).json({ message, file: `/uploads/processed_file.csv` });
+      } else if (fileType === 'excel') {
+        const newSheet = XLSX.utils.aoa_to_sheet(filteredData.map(id => [id]));
+        const newWorkbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(newWorkbook, newSheet, 'ProcessedData');
+        const newExcelFile = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'buffer' });
+    
+        const filePath = path.join(__dirname, 'uploads', 'processed_file.xlsx');
+        fs.writeFileSync(filePath, newExcelFile);
+    
+        res.status(200).json({ message, file: `/uploads/processed_file.xlsx` });
+      }
+    } catch (error) {
+      console.error('Error writing file:', error);
+      res.status(500).json({ message: 'Error generating file', error: error.message });
     }
   } catch (err) {
     console.error('Error querying DynamoDB:', err);
