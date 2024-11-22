@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "ts-node server.js",
-    "build": "tsc"
+    "build": "node server.js"
   },
   "keywords": [],
   "author": "",

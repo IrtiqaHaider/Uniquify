@@ -19,7 +19,7 @@ const FileUpload: React.FC = () => {
       try {
         // Send the file to the backend for processing
         const response = await axios.post(
-          "https://uniquify-backend.onrender.com/upload", // Use the live backend URL
+          "https://db928-service-20826069-e0c2bba7.us.monday.app/upload", // Use the live backend URL
           formData,
           {
             headers: {
@@ -60,7 +60,7 @@ const FileUpload: React.FC = () => {
   const handleDownload = async () => {
     console.log("file path: ", filePath);
     if (filePath) {
-      const downloadUrl = `https://uniquify-backend.onrender.com${filePath}`;
+      const downloadUrl = `https://db928-service-20826069-e0c2bba7.us.monday.app${filePath}`;
       console.log("Download link: ", downloadUrl);
 
       // Fetch the file as a Blob
@@ -77,10 +77,9 @@ const FileUpload: React.FC = () => {
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          setFilePath("\0");
-          setTimeout(() => {
-            window.location.reload();
-          }, 3000); // Adjust the time as needed
+          //setFilePath("\0");
+
+          window.location.reload();
         } else {
           console.error("Failed to fetch the file");
         }

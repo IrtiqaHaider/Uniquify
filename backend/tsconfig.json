@@ -1,0 +1,13 @@
+{
+    "compilerOptions": {
+      "allowJs": true,       // Allow JavaScript files
+      "checkJs": false,      // Skip checking JavaScript files (optional)
+      "target": "ESNext",    // Set ECMAScript target
+      "module": "CommonJS",  // Use CommonJS module system
+      "outDir": "dist",      // Specify the output directory
+      "skipLibCheck": true   // Skip type-checking for libraries
+    },
+    "include": ["./src/**/*"], // Include all source files
+    "exclude": ["node_modules"] // Exclude dependencies
+  }
+  
