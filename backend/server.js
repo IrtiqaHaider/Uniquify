@@ -9,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
-const deleteAllItems = require('./deleteItems')
+// const deleteAllItems = require('./deleteItems')
 const { PORT: port } = process.env;
 const app = express();
 
