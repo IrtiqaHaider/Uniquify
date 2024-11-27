@@ -150,37 +150,39 @@ const processAndRespond = async (processedData, fileType, res) => {
 
 // Fetch existing IDs with retry handling
 // Fetch existing IDs with retry and timeout
+// Modify getExistingIds to handle parallel requests
 const getExistingIds = async (processedData) => {
   const idsChunks = chunkArray(processedData, 100);
   const allExistingIds = [];
+
   console.log('--------------- Getting Existing Records from DB --------------------------');
 
-  let i = 0;
-
-  for (const chunk of idsChunks) {
-    i++;
-    console.log(`Processing Chunk #${i}`);
-
-    const params = {
-      RequestItems: {
-        [TABLE_NAME]: {
-          Keys: chunk.map(id => ({ ID: id })),
-          ProjectionExpression: 'ID',
+  try {
+    const results = await Promise.all(idsChunks.map(async (chunk) => {
+      const params = {
+        RequestItems: {
+          [TABLE_NAME]: {
+            Keys: chunk.map(id => ({ ID: id })),
+            ProjectionExpression: 'ID',
+          },
         },
-      },
-    };
-
-    try {
+      };
       const result = await dynamoDb.batchGet(params).promise();
-      allExistingIds.push(...(result.Responses[TABLE_NAME] || []).map(item => item.ID));
-      console.log(`Chunk #${i} processed successfully.`);
-    } catch (err) {
-      console.error(`Error processing Chunk #${i}:`, err);
-    }
+      return result.Responses[TABLE_NAME] || [];
+    }));
+
+    results.forEach(result => {
+      allExistingIds.push(...result.map(item => item.ID));
+    });
+
+    console.log('Completed fetching all existing IDs');
+  } catch (err) {
+    console.error('Error processing batches:', err);
   }
 
   return allExistingIds;
 };
+
 
 
 // Batch write new entries with throttling handling
@@ -264,5 +266,8 @@ const createFile = async (data, fileType) => {
 const server = app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on http://0.0.0.0:${port}`);
 });
+
+server.setTimeout(6000000); // 10 minutes, adjust as needed
+
 
 module.exports = app;
