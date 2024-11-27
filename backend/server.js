@@ -13,28 +13,20 @@ const upload = multer({ storage: storage });
 const port = 8303;
 const app = express();
 
-const corsOptions = {
-  origin: '*', // Frontend URL
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Allow necessary methods
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Requested-With',
-    'Accept',
-    'Origin',
-  ]
-};
-
  // Apply CORS middleware
 
 app.use(express.json({ limit: '50mb' })); // Increase JSON size limit
 app.use(express.urlencoded({ limit: '50mb', extended: true })); // Increase URL-encoded size limit
-//app.use(cors());
-app.use(cors(corsOptions));
-
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+app.use(cors({
+  origin: 'https://uniquify-uqvj.onrender.com', // Exact frontend origin
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+}));
+
+app.options('*', cors());
 
 // Set up AWS DynamoDB SDK configuration
 AWS.config.update({
