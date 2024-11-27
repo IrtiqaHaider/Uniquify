@@ -10,7 +10,7 @@ const path = require('path');
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 // const deleteAllItems = require('./deleteItems')
-const port = 3000;
+const port = 8303;
 const app = express();
 
 // const corsOptions = {
