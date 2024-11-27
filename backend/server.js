@@ -27,11 +27,14 @@ const app = express();
 
 // app.use(cors(corsOptions)); // Apply CORS middleware
 
-app.use(cors)
-app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.json({ limit: '50mb' })); // Increase JSON size limit
 app.use(express.urlencoded({ limit: '50mb', extended: true })); // Increase URL-encoded size limit
+app.use(cors());
+
+
+app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 
 // Set up AWS DynamoDB SDK configuration
 AWS.config.update({
