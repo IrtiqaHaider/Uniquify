@@ -14,7 +14,7 @@ const port = 8303;
 const app = express();
 
 const corsOptions = {
-  origin: 'https://uniquify-uqvj.onrender.com', // Frontend URL
+  origin: '*', // Frontend URL
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Allow necessary methods
   allowedHeaders: [
     'Content-Type',
