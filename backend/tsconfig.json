@@ -7,7 +7,7 @@
       "outDir": "dist",      // Specify the output directory
       "skipLibCheck": true   // Skip type-checking for libraries
     },
-    "include": ["./src/**/*"], // Include all source files
+    // "include": ["./src/**/*"], // Include all source files
     "exclude": ["node_modules"] // Exclude dependencies
   }
   

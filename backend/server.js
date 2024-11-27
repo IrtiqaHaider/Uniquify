@@ -9,52 +9,55 @@ const fs = require('fs');
 const path = require('path');
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
-
+const deleteAllItems = require('./deleteItems')
+const { PORT: port } = process.env;
 const app = express();
-const port = 5000;
 
-const corsOptions = {
-  origin: 'https://uniquify-uqvj.onrender.com', // Frontend URL
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type'],
-};
+// const corsOptions = {
+//   origin: 'https://uniquify-uqvj.onrender.com', // Frontend URL
+//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Allow necessary methods
+//   allowedHeaders: [
+//     'Content-Type',
+//     'Authorization',
+//     'X-Requested-With',
+//     'Accept',
+//     'Origin',
+//   ]
+// };
 
-app.use(cors(corsOptions)); // Apply CORS middleware
+// app.use(cors(corsOptions)); // Apply CORS middleware
 
+app.use(cors)
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
+app.use(express.json({ limit: '50mb' })); // Increase JSON size limit
+app.use(express.urlencoded({ limit: '50mb', extended: true })); // Increase URL-encoded size limit
 
 // Set up AWS DynamoDB SDK configuration
 AWS.config.update({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  region: process.env.AWS_REGION
+  region: process.env.AWS_REGION,
+  //logger: console,
+  retryDelayOptions: { base: 200 }, // Exponential backoff
+});
+
+//AWS.config.logger = console;
+
+
+const dynamoDb = new AWS.DynamoDB.DocumentClient({
+  maxRetries: 50,
 });
 
 const TABLE_NAME = process.env.DYNAMODB_TABLE_NAME;
 
-// const dynamoDb = new AWS.DynamoDB();
+console.log('TABLE_NAME:', TABLE_NAME);
 
-// const params = {
-//   TableName:  TABLE_NAME // Replace with your actual table name
-// };
-
-// dynamoDb.describeTable(params, (err, data) => {
-//   if (err) {
-//     console.error("Error connecting to DynamoDB:", err);
-//   } else {
-//     console.log("Successfully connected to DynamoDB! Table details:", data);
-//   }
-// });
-
-
-
-const dynamoDb = new AWS.DynamoDB.DocumentClient(); // DynamoDB Document Client
-
-// Route to handle file upload and data processing
+// File upload route
 app.post('/upload', upload.single('file'), async (req, res) => {
   const file = req.file;
+
+  console.log('--------------- In the router --------------------------')
 
   if (!file) {
     return res.status(400).json({ message: 'No file uploaded.' });
@@ -67,35 +70,27 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     // Process CSV
     if (extension === '.csv') {
       Papa.parse(file.buffer.toString(), {
-        complete: async result => {
-          processedData = Array.from(
-            new Set(result.data.map(row => parseFloat(row[0]))),
-          ).filter(Boolean);
-
+        complete: async (result) => {
+          processedData = Array.from(new Set(result.data.map(row => parseFloat(row[0])))).filter(Boolean);
           if (processedData.length === 0) {
             return res.status(200).json({ message: 'No data found in the file.', file: null });
           }
-
           await processAndRespond(processedData, 'csv', res);
         },
         header: false,
       });
-    }
+    } 
     // Process Excel
-    else if (extension === '.xlsx' || extension === '.xls') {
+    else if (['.xlsx', '.xls'].includes(extension)) {
       const workbook = XLSX.read(file.buffer, { type: 'buffer' });
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-
-      processedData = Array.from(
-        new Set(jsonData.map(row => parseFloat(row[0]))),
-      ).filter(Boolean);
+      processedData = Array.from(new Set(jsonData.map(row => parseFloat(row[0])))).filter(Boolean);
 
       if (processedData.length === 0) {
         return res.status(200).json({ message: 'No data found in the file.', file: null });
       }
-
       await processAndRespond(processedData, 'excel', res);
     } else {
       return res.status(400).json({ message: 'Invalid file type.' });
@@ -106,165 +101,181 @@ app.post('/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-// Process and respond based on processed data
+// Processing and response logic
 const processAndRespond = async (processedData, fileType, res) => {
-  const params = {
-    TableName: TABLE_NAME, // Replace with your DynamoDB table name
-    FilterExpression: '#val IN (:processedData)',
-    ExpressionAttributeNames: {
-      '#val': 'value', // Replace 'value' with the expression attribute name '#val'
-    },
-    ExpressionAttributeValues: {
-      ':processedData': processedData, // This will be the list of processed values
-    },
-  };
 
-  console.log('Table Name: ' , TABLE_NAME)
-  console.log('Processed Data:', processedData);
-  if (!Array.isArray(processedData) || processedData.length === 0) {
-  console.error('Processed Data is either not an array or empty.');
-  return res.status(400).json({ message: 'Invalid processed data provided.', file: null });
-}
+  try{
+    console.log(' ------------ Processed Data: ------------------- \n ' , processedData)
 
-
-  try {
-    // Query DynamoDB
-    //const existingIds = await dynamoDb.scan(params).promise();  // Use scan for filter expressions
-    
-    // let existingIds 
-    // try {
-    //   existingIds = await dynamoDb.scan(params).promise();
-    //   console.log('Scan Result:', existingIds);
-    // } catch (err) {
-    //   console.error('Error during scan:', err);
-    // }
-
-    let existingIds;
-    const params = {
-      TableName: TABLE_NAME,
-      ProjectionExpression: 'ID', // Only fetch the 'ID' attribute
-    };
-  
-    try {
-      console.log('Scanning DynamoDB...');
-      existingIds = await dynamoDb.scan(params).promise();
-      //console.log('Scan Result:', JSON.stringify(existingIds, null, 2));
-    } catch (err) {
-      console.error('Error during scan:', err);
-      return;
-    }
-
-    const existingValues = existingIds.Items.map(item => item.ID);
-    console.log('Extracted IDs:', existingValues);
-  
-    const newValues = processedData.filter(value => !existingValues.includes(value));
-    console.log('New Values to Insert:', newValues);
-    
-    // const existingValues = new Set(existingIds.Items.map(item => item.value));
-    // const newValues = processedData.filter(id => !existingValues.has(id));
-
-    let message;
-
-    if (processedData.length > 0 && newValues.length === 0) {
-      message = 'All entries were duplicates.';
-    } else if (newValues.length === processedData.length) {
-      message = 'No duplicate entries found.';
-    } else {
-      message = 'File processed successfully.';
-    }
-
-    console.log('Message: ', message)
-
-    console.log('New Values: ', newValues)
-
-    if (newValues.length > 0) {
-      const putRequests = newValues.map(value => ({
-        PutRequest: {
-          Item: { ID: value }, // Replace "ID" with your partition key name
-        },
-      }));
-    
-      try {
-        console.log('Batch Write Requests:', JSON.stringify(putRequests, null, 2));
-    
-        await dynamoDb.batchWrite({
-          RequestItems: {
-            [TABLE_NAME]: putRequests, // Ensure TABLE_NAME matches your table's name
-          },
-        }).promise();
-    
-        console.log('Batch write successful!');
-      } catch (err) {
-        console.error('Error during batchWrite:', err);
-        throw err; // Re-throw the error to log and debug
-      }
-    }
-
-    const filteredData = processedData.filter(id => !existingValues.includes(id));
-
-    console.log('Filtered Data: ' , filteredData)
-
-    if (filteredData.length === 0) {
-      return res.status(400).json({ message: 'No data to process.' });
+  } catch(err){
+    console.error('Error in Receiving data: ' , err)
   }
-  
 
   try {
-    const uploadDir = path.join(__dirname, 'uploads');
 
-    // Check if 'uploads' directory exists, if not create it
-    if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true }); // Use recursive to create all missing parent directories
+    console.log('--------------- In the process & respond --------------------------')
+    let existingIds
+    try{
+      existingIds = await getExistingIds(processedData);
+    }
+    catch(err){
+      console.error('Error in getting exisitnig ids:', err);
     }
 
-    // Ensure filteredData is not empty
-    if (filteredData.length === 0) {
-        return res.status(400).json({ message: 'No valid data to process.' });
+    console.log('\n ------------ Successfullyy fetched Exisiting Data --------------- \n')
+
+    let newValues
+    try{
+    newValues = processedData.filter(value => !existingIds.includes(value));
+  }catch(err){
+    console.error('Error in comparison:', err);
+  }
+
+    console.log('\n New Values Length after comparison: ', newValues.length)
+
+    if (newValues.length === 0) {
+      return res.status(400).json({ message: 'All entries were duplicates.' });
     }
 
-    if (fileType === 'csv') {
-        console.log('its csv');
-        
-        const newCsvFile = Papa.unparse(filteredData.map(id => [id]));
-        const filePath = path.join(uploadDir, 'processed_file.csv');
-        console.log('File path: ', filePath)
-        // Write the CSV file
-        fs.writeFileSync(filePath, newCsvFile);
-        console.log('File written successfully');
-        
-        // Return response with the path to the file
-        res.status(200).json({ message: 'File processed successfully.', file: `/uploads/processed_file.csv` });
-    } else if (fileType === 'excel') {
-        console.log('its excel');
-        
-        const newSheet = XLSX.utils.aoa_to_sheet(filteredData.map(id => [id]));
-        const newWorkbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(newWorkbook, newSheet, 'ProcessedData');
-        const newExcelFile = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'buffer' });
-        
-        const filePath = path.join(uploadDir, 'processed_file.xlsx');
-        console.log('File path: ', filePath)
-        
-        // Write the Excel file
-        fs.writeFileSync(filePath, newExcelFile);
-        console.log('File written successfully');
-        
-        // Return response with the path to the file
-        res.status(200).json({ message: 'File processed successfully.', file: `/uploads/processed_file.xlsx` });
-    }
-} catch (error) {
-    console.error('Error writing file:', error.message || error);
-    res.status(500).json({ message: 'Error processing the file.' });
-}
+    console.log('\n ------------ Going to Write Exisiting Data --------------- \n')
 
-  
+    try{
+      await batchWriteNewEntries(newValues);
+    }
+    catch(err){
+      console.error('Error in writing new values:', err);
+    }
+    const filePath = await createFile(newValues, fileType);
+    return res.status(200).json({ message: 'File processed successfully.', file: filePath });
   } catch (err) {
-    console.error('Error querying DynamoDB:', err);
+    console.error('Error during processing:', err);
     return res.status(500).json({ message: 'Error processing file.', file: null });
   }
 };
 
+// Fetch existing IDs with retry handling
+const getExistingIds = async (processedData) => {
+  const idsChunks = chunkArray(processedData, 100);
+  const allExistingIds = [];
 
-app.listen(port, () => {
+  console.log('--------------- Getting Existing Records from DB --------------------------')
+
+  let i = 0
+
+  for (const chunk of idsChunks) {
+
+    i++;
+
+    console.log('----------- Processing Chunk No: ', i)
+    // console.log('Chunk: ', chunk)
+
+    const params = {
+      RequestItems: {
+        [TABLE_NAME]: {
+          Keys: chunk.map(id => ({ ID: id })),
+          ProjectionExpression: 'ID',
+        },
+      },
+    };
+
+    try {
+      const result = await dynamoDb.batchGet(params).promise();
+      allExistingIds.push(...(result.Responses[TABLE_NAME] || []).map(item => item.ID));
+      delay(3000)
+      // console.log('Result:', JSON.stringify(result, null, 2));-
+    } catch (err) {
+      console.error('--------------- Error fetching existing IDs: ------------------', err);
+      throw err;
+    }
+
+    
+  }
+
+  return allExistingIds;
+};
+
+// Batch write new entries with throttling handling
+const batchWriteNewEntries = async (newValues) => {
+
+  console.log('--------------- Writing New Records into DB --------------------------')
+
+  const putRequests = newValues.map(value => ({
+    PutRequest: {
+      Item: { ID: value },
+    },
+  }));
+
+  const chunks = chunkArray(putRequests, 25);
+
+  let i = 0
+
+  for (const chunk of chunks) {
+
+    i++;
+
+    
+    console.log('------------ Processing Chunk: ', i)
+    //console.log('Chunk: ', chunk)
+
+    const params = {
+      RequestItems: {
+        [TABLE_NAME]: chunk,
+      },
+    };
+
+    try {
+      await dynamoDb.batchWrite(params).promise();
+      delay(1000)
+    } catch (err) {
+      if (err.retryable) {
+        console.warn('Retryable error during batchWrite:', err);
+        await delay(1000); // Add delay before retry
+        await batchWriteNewEntries(chunk.map(request => request.PutRequest.Item.ID));
+      } else {
+        console.error('Error during batchWrite:', err);
+        throw err;
+      }
+    }
+  }
+};
+
+// Utility: Split array into chunks
+const chunkArray = (array, chunkSize) => {
+  const chunks = [];
+  for (let i = 0; i < array.length; i += chunkSize) {
+    chunks.push(array.slice(i, i + chunkSize));
+  }
+  return chunks;
+};
+
+// Utility: Delay function
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Create a file (CSV/Excel) after processing
+const createFile = async (data, fileType) => {
+  const uploadDir = path.join(__dirname, 'uploads');
+  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+
+  const fileName = `processed_file.${fileType}`;
+  const filePath = path.join(uploadDir, fileName);
+
+  if (fileType === 'csv') {
+    const csvContent = Papa.unparse(data.map(id => [id]));
+    fs.writeFileSync(filePath, csvContent);
+  } else {
+    const sheet = XLSX.utils.aoa_to_sheet(data.map(id => [id]));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Data');
+    XLSX.writeFile(workbook, filePath);
+  }
+
+  return `/uploads/${fileName}`;
+};
+
+const server = app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });
+
+server.timeout = 0;
+
+module.exports = app;
