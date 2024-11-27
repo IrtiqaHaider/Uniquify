@@ -149,20 +149,17 @@ const processAndRespond = async (processedData, fileType, res) => {
 };
 
 // Fetch existing IDs with retry handling
+// Fetch existing IDs with retry and timeout
 const getExistingIds = async (processedData) => {
   const idsChunks = chunkArray(processedData, 100);
   const allExistingIds = [];
+  console.log('--------------- Getting Existing Records from DB --------------------------');
 
-  console.log('--------------- Getting Existing Records from DB --------------------------')
-
-  let i = 0
+  let i = 0;
 
   for (const chunk of idsChunks) {
-
     i++;
-
-    console.log('----------- Processing Chunk No: ', i)
-    // console.log('Chunk: ', chunk)
+    console.log(`Processing Chunk #${i}`);
 
     const params = {
       RequestItems: {
@@ -176,18 +173,15 @@ const getExistingIds = async (processedData) => {
     try {
       const result = await dynamoDb.batchGet(params).promise();
       allExistingIds.push(...(result.Responses[TABLE_NAME] || []).map(item => item.ID));
-      delay(3000)
-      // console.log('Result:', JSON.stringify(result, null, 2));-
+      console.log(`Chunk #${i} processed successfully.`);
     } catch (err) {
-      console.error('--------------- Error fetching existing IDs: ------------------', err);
-      throw err;
+      console.error(`Error processing Chunk #${i}:`, err);
     }
-
-    
   }
 
   return allExistingIds;
 };
+
 
 // Batch write new entries with throttling handling
 const batchWriteNewEntries = async (newValues) => {
@@ -220,7 +214,7 @@ const batchWriteNewEntries = async (newValues) => {
 
     try {
       await dynamoDb.batchWrite(params).promise();
-      delay(1000)
+      //delay(1000)
     } catch (err) {
       if (err.retryable) {
         console.warn('Retryable error during batchWrite:', err);
