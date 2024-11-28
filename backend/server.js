@@ -15,19 +15,19 @@ const app = express();
 
  // Apply CORS middleware
 
- app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'https://uniquify-uqvj.onrender.com'); // Allow specific origin
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS'); // Allowed HTTP methods
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization'); // Allowed headers
-  // res.header('Access-Control-Allow-Credentials', 'true'); // Allow cookies if needed
+//  app.use((req, res, next) => {
+//   res.header('Access-Control-Allow-Origin', 'https://uniquify-uqvj.onrender.com'); // Allow specific origin
+//   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS'); // Allowed HTTP methods
+//   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization'); // Allowed headers
+//   // res.header('Access-Control-Allow-Credentials', 'true'); // Allow cookies if needed
 
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-      return res.sendStatus(204); // Respond to OPTIONS requests with no content
-  }
+//   // Handle preflight requests
+//   if (req.method === 'OPTIONS') {
+//       return res.sendStatus(204); // Respond to OPTIONS requests with no content
+//   }
 
-  next();
-}); 
+//   next();
+// }); 
 
 app.use(express.json({ limit: '50mb' })); // Increase JSON size limit
 app.use(express.urlencoded({ limit: '50mb', extended: true })); // Increase URL-encoded size limit
@@ -41,6 +41,29 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // }));
 
 // app.options('*', cors());
+
+
+const allowedOrigins = ["https://uniquify-uqvj.onrender.com"];
+ 
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+ 
+    // Allow any subdomain of .monday.app
+    if (
+      origin.endsWith(":5173") ||
+      origin.endsWith("ngrok-free.app") ||
+      allowedOrigins.includes(origin)
+    ) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+};
+ 
+app.use(cors(corsOptions));
 
 // Set up AWS DynamoDB SDK configuration
 AWS.config.update({
@@ -277,7 +300,7 @@ const createFile = async (data, fileType) => {
   return `/uploads/${fileName}`;
 };
 
-const server = app.listen(port, '0.0.0.0', () => {
+const server = app.listen(process.env.PORT, '0.0.0.0', () => {
   console.log(`Server running on http://0.0.0.0:${port}`);
 });
 
