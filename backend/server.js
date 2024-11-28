@@ -13,58 +13,19 @@ const upload = multer({ storage: storage });
 const port = process.env.PORT || 8301;
 const app = express();
 
- // Apply CORS middleware
+const corsOptions = {
+  origin: 'http://localhost:5173', // Allow this specific origin
+  methods: ['GET', 'POST'], // Allow specific HTTP methods
+  allowedHeaders: ['Content-Type'], // Allow specific headers
+};
 
-//  app.use((req, res, next) => {
-//   res.header('Access-Control-Allow-Origin', 'https://uniquify-uqvj.onrender.com'); // Allow specific origin
-//   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS'); // Allowed HTTP methods
-//   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization'); // Allowed headers
-//   // res.header('Access-Control-Allow-Credentials', 'true'); // Allow cookies if needed
+app.use(cors(corsOptions)); // Enable CORS with the specified options
 
-//   // Handle preflight requests
-//   if (req.method === 'OPTIONS') {
-//       return res.sendStatus(204); // Respond to OPTIONS requests with no content
-//   }
-
-//   next();
-// }); 
 
 app.use(express.json({ limit: '50mb' })); // Increase JSON size limit
 app.use(express.urlencoded({ limit: '50mb', extended: true })); // Increase URL-encoded size limit
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// app.use(cors({
-//   origin: 'https://uniquify-uqvj.onrender.com', // Exact frontend origin
-//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-//   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-// }));
-
-// app.options('*', cors());
-
-
-const allowedOrigins = ["https://uniquify-uqvj.onrender.com"];
- 
-const corsOptions = {
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
- 
-    // Allow any subdomain of .monday.app
-    if (
-      origin.endsWith(":8301") ||
-      origin.endsWith("onrender.com") ||
-      origin.endsWith("/upload") ||
-      allowedOrigins.includes(origin)
-    ) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
-  credentials: true,
-};
- 
-app.use(cors(corsOptions));
 
 // Set up AWS DynamoDB SDK configuration
 AWS.config.update({
@@ -136,48 +97,53 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 
 // Processing and response logic
 const processAndRespond = async (processedData, fileType, res) => {
-
-  try{
-    console.log(' ------------ Processed Data: ------------------- \n ' , processedData)
-
-  } catch(err){
-    console.error('Error in Receiving data: ' , err)
+  try {
+    console.log(' ------------ Processed Data: ------------------- \n ', processedData);
+  } catch (err) {
+    console.error('Error in Receiving data: ', err);
   }
 
   try {
+    console.log('--------------- In the process & respond --------------------------');
+    let existingIds;
 
-    console.log('--------------- In the process & respond --------------------------')
-    let existingIds
-    try{
-      existingIds = await getExistingIds(processedData);
+    // Fetch existing IDs
+    try {
+      const existingIdsArray = await getExistingIds(processedData);
+      existingIds = new Set(existingIdsArray); // Store as Set for efficient lookups
+    } catch (err) {
+      console.error('Error in getting existing ids:', err);
+      return res.status(500).json({ message: 'Error fetching existing IDs.' });
     }
-    catch(err){
-      console.error('Error in getting exisitnig ids:', err);
+
+    console.log('\n ------------ Successfully fetched Existing Data --------------- \n');
+
+    let newValues;
+    try {
+      // Filter new values using the Set
+      newValues = processedData.filter(value => !existingIds.has(value));
+    } catch (err) {
+      console.error('Error in comparison:', err);
+      return res.status(500).json({ message: 'Error during comparison.' });
     }
 
-    console.log('\n ------------ Successfullyy fetched Exisiting Data --------------- \n')
-
-    let newValues
-    try{
-    newValues = processedData.filter(value => !existingIds.includes(value));
-  }catch(err){
-    console.error('Error in comparison:', err);
-  }
-
-    console.log('\n New Values Length after comparison: ', newValues.length)
+    console.log('\n New Values Length after comparison: ', newValues.length);
 
     if (newValues.length === 0) {
       return res.status(400).json({ message: 'All entries were duplicates.' });
     }
 
-    console.log('\n ------------ Going to Write Exisiting Data --------------- \n')
+    console.log('\n ------------ Going to Write New Data --------------- \n');
 
-    try{
+    // Write new entries to the database
+    try {
       await batchWriteNewEntries(newValues);
-    }
-    catch(err){
+    } catch (err) {
       console.error('Error in writing new values:', err);
+      return res.status(500).json({ message: 'Error writing new entries.' });
     }
+
+    // Create output file and respond with its path
     const filePath = await createFile(newValues, fileType);
     return res.status(200).json({ message: 'File processed successfully.', file: filePath });
   } catch (err) {
@@ -186,17 +152,16 @@ const processAndRespond = async (processedData, fileType, res) => {
   }
 };
 
-// Fetch existing IDs with retry handling
-// Fetch existing IDs with retry and timeout
-// Modify getExistingIds to handle parallel requests
+
 const getExistingIds = async (processedData) => {
-  const idsChunks = chunkArray(processedData, 100);
-  const allExistingIds = [];
+  const idsChunks = chunkArray(processedData, 100); // DynamoDB batch limit
+  const allExistingIds = new Set(); // Use a Set for faster lookups and no duplicates
 
   console.log('--------------- Getting Existing Records from DB --------------------------');
 
   try {
-    const results = await Promise.all(idsChunks.map(async (chunk) => {
+    // Fetch all chunks in parallel
+    await Promise.all(idsChunks.map(async (chunk, index) => {
       const params = {
         RequestItems: {
           [TABLE_NAME]: {
@@ -205,46 +170,45 @@ const getExistingIds = async (processedData) => {
           },
         },
       };
-      const result = await dynamoDb.batchGet(params).promise();
-      return result.Responses[TABLE_NAME] || [];
-    }));
 
-    results.forEach(result => {
-      allExistingIds.push(...result.map(item => item.ID));
-    });
+      const result = await dynamoDb.batchGet(params).promise();
+      const existingIds = result.Responses[TABLE_NAME] || [];
+
+      existingIds.forEach(item => allExistingIds.add(item.ID)); // Add to Set
+      console.log(`Processed chunk ${index + 1} of ${idsChunks.length}`);
+    }));
 
     console.log('Completed fetching all existing IDs');
   } catch (err) {
     console.error('Error processing batches:', err);
   }
 
-  return allExistingIds;
+  return Array.from(allExistingIds); // Convert Set to Array
 };
 
 
-
-// Batch write new entries with throttling handling
 const batchWriteNewEntries = async (newValues) => {
+  console.log('--------------- Writing New Records into DB --------------------------');
 
-  console.log('--------------- Writing New Records into DB --------------------------')
-
+  // Create PutRequest items
   const putRequests = newValues.map(value => ({
     PutRequest: {
       Item: { ID: value },
     },
   }));
 
+  // Split into chunks of 25 (DynamoDB limit)
   const chunks = chunkArray(putRequests, 25);
 
-  let i = 0
+  console.log(`Total chunks to process: ${chunks.length}`);
+  let currentlyProcessing = 0;
 
-  for (const chunk of chunks) {
-
-    i++;
-
-    
-    console.log('------------ Processing Chunk: ', i)
-    //console.log('Chunk: ', chunk)
+  // Function to process a single chunk
+  const processChunk = async (chunk, chunkIndex) => {
+    currentlyProcessing++;
+    console.log(
+      `Processing chunk ${chunkIndex + 1}/${chunks.length}. Currently processing: ${currentlyProcessing}`
+    );
 
     const params = {
       RequestItems: {
@@ -254,18 +218,36 @@ const batchWriteNewEntries = async (newValues) => {
 
     try {
       await dynamoDb.batchWrite(params).promise();
-      //delay(1000)
     } catch (err) {
       if (err.retryable) {
-        console.warn('Retryable error during batchWrite:', err);
+        console.warn(`Retryable error during batchWrite on chunk ${chunkIndex + 1}:`, err);
         await delay(1000); // Add delay before retry
-        await batchWriteNewEntries(chunk.map(request => request.PutRequest.Item.ID));
+        await processChunk(chunk, chunkIndex);
       } else {
-        console.error('Error during batchWrite:', err);
+        console.error(`Error during batchWrite on chunk ${chunkIndex + 1}:`, err);
         throw err;
       }
+    } finally {
+      currentlyProcessing--;
+      // console.log(
+      //   `Finished processing chunk ${chunkIndex + 1}. Currently processing: ${currentlyProcessing}`
+      // );
     }
+  };
+
+  // Process chunks in parallel (limit concurrency for DynamoDB)
+  const MAX_CONCURRENT_REQUESTS = 10000; // Adjust this based on your workload
+  const chunkBatches = chunkArray(chunks, MAX_CONCURRENT_REQUESTS);
+
+  for (const batch of chunkBatches) {
+    await Promise.all(
+      batch.map((chunk, index) =>
+        processChunk(chunk, chunks.indexOf(chunk)) // Pass the actual chunk index
+      )
+    );
   }
+
+  console.log('All chunks processed.');
 };
 
 // Utility: Split array into chunks
