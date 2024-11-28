@@ -53,6 +53,7 @@ const corsOptions = {
     if (
       origin.endsWith(":8301") ||
       origin.endsWith("onrender.com") ||
+      origin.endsWith("/upload") ||
       allowedOrigins.includes(origin)
     ) {
       callback(null, true);
