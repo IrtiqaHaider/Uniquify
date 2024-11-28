@@ -15,18 +15,32 @@ const app = express();
 
  // Apply CORS middleware
 
+ app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'https://uniquify-uqvj.onrender.com'); // Allow specific origin
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS'); // Allowed HTTP methods
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization'); // Allowed headers
+  // res.header('Access-Control-Allow-Credentials', 'true'); // Allow cookies if needed
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+      return res.sendStatus(204); // Respond to OPTIONS requests with no content
+  }
+
+  next();
+}); 
+
 app.use(express.json({ limit: '50mb' })); // Increase JSON size limit
 app.use(express.urlencoded({ limit: '50mb', extended: true })); // Increase URL-encoded size limit
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-app.use(cors({
-  origin: '*', // Exact frontend origin
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-}));
+// app.use(cors({
+//   origin: 'https://uniquify-uqvj.onrender.com', // Exact frontend origin
+//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+//   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+// }));
 
-app.options('*', cors());
+// app.options('*', cors());
 
 // Set up AWS DynamoDB SDK configuration
 AWS.config.update({
