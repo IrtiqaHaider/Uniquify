@@ -10,7 +10,7 @@ const path = require('path');
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 // const deleteAllItems = require('./deleteItems')
-const port = 8303;
+const port = process.env.PORT || 8301;
 const app = express();
 
  // Apply CORS middleware
@@ -51,8 +51,8 @@ const corsOptions = {
  
     // Allow any subdomain of .monday.app
     if (
-      origin.endsWith(":5173") ||
-      origin.endsWith("ngrok-free.app") ||
+      origin.endsWith(":8301") ||
+      origin.endsWith("onrender.com") ||
       allowedOrigins.includes(origin)
     ) {
       callback(null, true);
@@ -300,7 +300,7 @@ const createFile = async (data, fileType) => {
   return `/uploads/${fileName}`;
 };
 
-const server = app.listen(process.env.PORT, '0.0.0.0', () => {
+const server = app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on http://0.0.0.0:${port}`);
 });
 
