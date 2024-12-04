@@ -7,37 +7,29 @@ const XLSX = require('xlsx');
 const AWS = require('aws-sdk');
 const fs = require('fs');
 const path = require('path');
+
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
-// const deleteAllItems = require('./deleteItems')
+
 const port = process.env.PORT || 8301;
 const app = express();
 
 const corsOptions = {
-  origin: 'http://localhost:5173', // Allow this specific origin
-  methods: ['GET', 'POST'], // Allow specific HTTP methods
-  allowedHeaders: ['Content-Type'], // Allow specific headers
+  origin: 'http://localhost:5174',
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type'],
 };
 
-app.use(cors(corsOptions)); // Enable CORS with the specified options
-
-
-app.use(express.json({ limit: '50mb' })); // Increase JSON size limit
-app.use(express.urlencoded({ limit: '50mb', extended: true })); // Increase URL-encoded size limit
-app.use(express.json());
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Set up AWS DynamoDB SDK configuration
 AWS.config.update({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   region: process.env.AWS_REGION,
-  //logger: console,
-  retryDelayOptions: { base: 200 }, // Exponential backoff
 });
-
-//AWS.config.logger = console;
-
 
 const dynamoDb = new AWS.DynamoDB.DocumentClient({
   maxRetries: 50,
@@ -47,25 +39,27 @@ const TABLE_NAME = process.env.DYNAMODB_TABLE_NAME;
 
 console.log('TABLE_NAME:', TABLE_NAME);
 
-// File upload route
 app.post('/upload', upload.single('file'), async (req, res) => {
+  console.log('File upload initiated.');
   const file = req.file;
 
-  console.log('--------------- In the router --------------------------')
-
   if (!file) {
+    console.error('No file uploaded.');
     return res.status(400).json({ message: 'No file uploaded.' });
   }
 
   const extension = path.extname(file.originalname).toLowerCase();
+  console.log(`File extension detected: ${extension}`);
   let processedData = [];
 
   try {
-    // Process CSV
     if (extension === '.csv') {
+      console.log('Processing CSV file...');
       Papa.parse(file.buffer.toString(), {
         complete: async (result) => {
-          processedData = Array.from(new Set(result.data.map(row => parseFloat(row[0])))).filter(Boolean);
+          console.log('CSV parsing complete.');
+          processedData = extractUniqueValues(result.data);
+          console.log(`Extracted unique values: ${processedData.length}`);
           if (processedData.length === 0) {
             return res.status(200).json({ message: 'No data found in the file.', file: null });
           }
@@ -73,20 +67,22 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         },
         header: false,
       });
-    } 
-    // Process Excel
-    else if (['.xlsx', '.xls'].includes(extension)) {
+    } else if (['.xlsx', '.xls'].includes(extension)) {
+      console.log('Processing Excel file...');
       const workbook = XLSX.read(file.buffer, { type: 'buffer' });
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-      processedData = Array.from(new Set(jsonData.map(row => parseFloat(row[0])))).filter(Boolean);
+      console.log('Excel parsing complete.');
+      processedData = extractUniqueValues(jsonData);
+      console.log(`Extracted unique values: ${processedData.length}`);
 
       if (processedData.length === 0) {
         return res.status(200).json({ message: 'No data found in the file.', file: null });
       }
       await processAndRespond(processedData, 'excel', res);
     } else {
+      console.error('Invalid file type.');
       return res.status(400).json({ message: 'Invalid file type.' });
     }
   } catch (err) {
@@ -95,160 +91,194 @@ app.post('/upload', upload.single('file'), async (req, res) => {
   }
 });
 
+// Helper function to extract unique values from all columns
+const extractUniqueValues = (data) => {
+  console.log('Extracting unique values from data...');
+  const uniqueValues = new Set();
+  data.forEach(row => {
+    row.forEach(value => {
+      if (value && !isNaN(value)) {
+        uniqueValues.add(parseFloat(value));
+      }
+    });
+  });
+  console.log(`Unique values extraction complete. Count: ${uniqueValues.size}`);
+  return Array.from(uniqueValues);
+};
+
 // Processing and response logic
 const processAndRespond = async (processedData, fileType, res) => {
   try {
-    console.log(' ------------ Processed Data: ------------------- \n ', processedData);
-  } catch (err) {
-    console.error('Error in Receiving data: ', err);
-  }
-
-  try {
-    console.log('--------------- In the process & respond --------------------------');
+    console.log('Fetching existing IDs from DynamoDB...');
     let existingIds;
 
-    // Fetch existing IDs
     try {
       const existingIdsArray = await getExistingIds(processedData);
-      existingIds = new Set(existingIdsArray); // Store as Set for efficient lookups
+      existingIds = new Set(existingIdsArray);
+      console.log(`Fetched existing IDs. Count: ${existingIds.size}`);
     } catch (err) {
       console.error('Error in getting existing ids:', err);
       return res.status(500).json({ message: 'Error fetching existing IDs.' });
     }
 
-    console.log('\n ------------ Successfully fetched Existing Data --------------- \n');
-
+    console.log('Filtering new values...');
     let newValues;
     try {
-      // Filter new values using the Set
       newValues = processedData.filter(value => !existingIds.has(value));
+      console.log(`New values identified. Count: ${newValues.length}`);
     } catch (err) {
       console.error('Error in comparison:', err);
       return res.status(500).json({ message: 'Error during comparison.' });
     }
 
-    console.log('\n New Values Length after comparison: ', newValues.length);
-
     if (newValues.length === 0) {
+      console.warn('All entries were duplicates.');
       return res.status(400).json({ message: 'All entries were duplicates.' });
     }
 
-    console.log('\n ------------ Going to Write New Data --------------- \n');
-
-    // Write new entries to the database
+    console.log('Writing new values to DynamoDB...');
     try {
       await batchWriteNewEntries(newValues);
+      console.log('New values successfully written to DynamoDB.');
     } catch (err) {
       console.error('Error in writing new values:', err);
       return res.status(500).json({ message: 'Error writing new entries.' });
     }
 
-    // Create output file and respond with its path
+    console.log('Creating output file...');
     const filePath = await createFile(newValues, fileType);
+    console.log(`Output file created at: ${filePath}`);
     return res.status(200).json({ message: 'File processed successfully.', file: filePath });
   } catch (err) {
     console.error('Error during processing:', err);
     return res.status(500).json({ message: 'Error processing file.', file: null });
   }
 };
-
-
+// Fetch existing IDs from DynamoDB with concurrency
 const getExistingIds = async (processedData) => {
-  const idsChunks = chunkArray(processedData, 100); // DynamoDB batch limit
-  const allExistingIds = new Set(); // Use a Set for faster lookups and no duplicates
-
-  console.log('--------------- Getting Existing Records from DB --------------------------');
+  console.log('Chunking processed data for batch fetching...');
+  const idsChunks = chunkArray(processedData, 100);
+  console.log(`Total chunks created: ${idsChunks.length}`);
+  const allExistingIds = new Set();
 
   try {
-    // Fetch all chunks in parallel
-    await Promise.all(idsChunks.map(async (chunk, index) => {
-      const params = {
-        RequestItems: {
-          [TABLE_NAME]: {
-            Keys: chunk.map(id => ({ ID: id })),
-            ProjectionExpression: 'ID',
+    await Promise.all(
+      idsChunks.map(async (chunk, index) => {
+        console.log(`Fetching batch ${index + 1} of ${idsChunks.length}`);
+        const params = {
+          RequestItems: {
+            [TABLE_NAME]: {
+              Keys: chunk.map((id) => ({ ID: id })),
+              ProjectionExpression: 'ID',
+            },
           },
-        },
-      };
+        };
 
-      const result = await dynamoDb.batchGet(params).promise();
-      const existingIds = result.Responses[TABLE_NAME] || [];
-
-      existingIds.forEach(item => allExistingIds.add(item.ID)); // Add to Set
-      console.log(`Processed chunk ${index + 1} of ${idsChunks.length}`);
-    }));
-
-    console.log('Completed fetching all existing IDs');
+        try {
+          const result = await dynamoDb.batchGet(params).promise();
+          const existingIds = result.Responses[TABLE_NAME] || [];
+          //console.log(`Batch ${index + 1}: Fetched ${existingIds.length} existing IDs.`);
+          existingIds.forEach((item) => allExistingIds.add(item.ID));
+        } catch (err) {
+          console.error(`Error fetching batch ${index + 1}:`, err);
+        }
+      })
+    );
   } catch (err) {
-    console.error('Error processing batches:', err);
+    console.error('Error processing batches concurrently:', err);
   }
 
-  return Array.from(allExistingIds); // Convert Set to Array
+  console.log(`Total existing IDs found: ${allExistingIds.size}`);
+  return Array.from(allExistingIds);
 };
 
-
+// Write new entries to DynamoDB with concurrency
 const batchWriteNewEntries = async (newValues) => {
-  console.log('--------------- Writing New Records into DB --------------------------');
-
-  // Create PutRequest items
-  const putRequests = newValues.map(value => ({
+  console.log('Chunking new values for batch writing...');
+  const putRequests = newValues.map((value) => ({
     PutRequest: {
       Item: { ID: value },
     },
   }));
 
-  // Split into chunks of 25 (DynamoDB limit)
   const chunks = chunkArray(putRequests, 25);
+  console.log(`Total chunks to write: ${chunks.length}`);
 
-  console.log(`Total chunks to process: ${chunks.length}`);
-  let currentlyProcessing = 0;
-
-  // Function to process a single chunk
-  const processChunk = async (chunk, chunkIndex) => {
-    currentlyProcessing++;
-    console.log(
-      `Processing chunk ${chunkIndex + 1}/${chunks.length}. Currently processing: ${currentlyProcessing}`
-    );
-
-    const params = {
-      RequestItems: {
-        [TABLE_NAME]: chunk,
-      },
-    };
-
-    try {
-      await dynamoDb.batchWrite(params).promise();
-    } catch (err) {
-      if (err.retryable) {
-        console.warn(`Retryable error during batchWrite on chunk ${chunkIndex + 1}:`, err);
-        await delay(1000); // Add delay before retry
-        await processChunk(chunk, chunkIndex);
-      } else {
-        console.error(`Error during batchWrite on chunk ${chunkIndex + 1}:`, err);
-        throw err;
-      }
-    } finally {
-      currentlyProcessing--;
-      // console.log(
-      //   `Finished processing chunk ${chunkIndex + 1}. Currently processing: ${currentlyProcessing}`
-      // );
-    }
-  };
-
-  // Process chunks in parallel (limit concurrency for DynamoDB)
-  const MAX_CONCURRENT_REQUESTS = 10000; // Adjust this based on your workload
-  const chunkBatches = chunkArray(chunks, MAX_CONCURRENT_REQUESTS);
-
-  for (const batch of chunkBatches) {
+  try {
     await Promise.all(
-      batch.map((chunk, index) =>
-        processChunk(chunk, chunks.indexOf(chunk)) // Pass the actual chunk index
-      )
-    );
-  }
+      chunks.map(async (chunk, index) => {
+        const params = {
+          RequestItems: {
+            [TABLE_NAME]: chunk,
+          },
+        };
 
-  console.log('All chunks processed.');
+        try {
+          console.log(`Writing batch ${index + 1} of ${chunks.length}`);
+          await dynamoDb.batchWrite(params).promise();
+          console.log(`Batch ${index + 1} written successfully.`);
+        } catch (err) {
+          console.error(`Error writing batch ${index + 1}:`, err);
+        }
+      })
+    );
+  } catch (err) {
+    console.error('Error writing batches concurrently:', err);
+  }
 };
+
+// Create output file concurrently
+const createFile = async (data, fileType) => {
+  console.log('Creating file with chunked data...');
+  const uploadDir = path.join(__dirname, 'uploads');
+  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+
+  const fileName = `processed_file.${fileType}`;
+  const filePath = path.join(uploadDir, fileName);
+
+  try {
+    // Chunk data into columns of 500,000 entries each
+    const chunkSize = 500000;
+    const chunkedData = [];
+    for (let i = 0; i < data.length; i += chunkSize) {
+      chunkedData.push(data.slice(i, i + chunkSize));
+    }
+
+    if (fileType === 'csv') {
+      // Prepare data for CSV: Each chunk becomes a column
+      const rows = [];
+      const maxRows = Math.max(...chunkedData.map((chunk) => chunk.length));
+      for (let rowIndex = 0; rowIndex < maxRows; rowIndex++) {
+        const row = chunkedData.map((chunk) => chunk[rowIndex] || '');
+        rows.push(row);
+      }
+
+      const csvContent = Papa.unparse(rows);
+      await fs.promises.writeFile(filePath, csvContent);
+    } else {
+      // Prepare data for Excel: Each chunk becomes a column
+      const sheetData = [];
+      const maxRows = Math.max(...chunkedData.map((chunk) => chunk.length));
+      for (let rowIndex = 0; rowIndex < maxRows; rowIndex++) {
+        const row = chunkedData.map((chunk) => chunk[rowIndex] || null);
+        sheetData.push(row);
+      }
+
+      const sheet = XLSX.utils.aoa_to_sheet(sheetData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Data');
+      XLSX.writeFile(workbook, filePath);
+    }
+
+    console.log(`File created at: ${filePath}`);
+    return `/uploads/${fileName}`;
+  } catch (err) {
+    console.error('Error creating file:', err);
+    throw err;
+  }
+};
+
+
 
 // Utility: Split array into chunks
 const chunkArray = (array, chunkSize) => {
@@ -259,35 +289,10 @@ const chunkArray = (array, chunkSize) => {
   return chunks;
 };
 
-// Utility: Delay function
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Create a file (CSV/Excel) after processing
-const createFile = async (data, fileType) => {
-  const uploadDir = path.join(__dirname, 'uploads');
-  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-
-  const fileName = `processed_file.${fileType}`;
-  const filePath = path.join(uploadDir, fileName);
-
-  if (fileType === 'csv') {
-    const csvContent = Papa.unparse(data.map(id => [id]));
-    fs.writeFileSync(filePath, csvContent);
-  } else {
-    const sheet = XLSX.utils.aoa_to_sheet(data.map(id => [id]));
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, sheet, 'Data');
-    XLSX.writeFile(workbook, filePath);
-  }
-
-  return `/uploads/${fileName}`;
-};
-
 const server = app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on http://0.0.0.0:${port}`);
 });
 
-server.setTimeout(6000000); // 10 minutes, adjust as needed
-
+server.setTimeout(6000000);
 
 module.exports = app;

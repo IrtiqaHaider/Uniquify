@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "ts-node server.js",
+    "dev": "node --max-old-space-size=8192 -r ts-node/register server.js",
     "build": "node server.js"
   },
   "keywords": [],

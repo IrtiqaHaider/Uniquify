@@ -19,7 +19,7 @@ const FileUpload: React.FC = () => {
       try {
         // Send the file to the backend for processing
         const response = await axios.post(
-          "https://db928-service-20826069-e0c2bba7.us.monday.app/upload", // Use the live backend URL
+          "http://localhost:5000/upload", // Use the live backend URL
           formData,
           {
             headers: {
@@ -60,7 +60,7 @@ const FileUpload: React.FC = () => {
   const handleDownload = async () => {
     console.log("file path: ", filePath);
     if (filePath) {
-      const downloadUrl = `https://db928-service-20826069-e0c2bba7.us.monday.app${filePath}`;
+      const downloadUrl = `http://localhost:5000${filePath}`;
       console.log("Download link: ", downloadUrl);
 
       // Fetch the file as a Blob
