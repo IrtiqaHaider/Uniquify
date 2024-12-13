@@ -22,7 +22,7 @@ const FileUpload: React.FC = () => {
       try {
         // Send the file to the backend for processing
         const response = await axios.post(
-          "http://176.111.218.197:5001/upload", // Use the live backend URL
+          "https://176.111.218.197:5001/upload", // Use the live backend URL
           formData,
           {
             headers: {
@@ -63,7 +63,7 @@ const FileUpload: React.FC = () => {
   const handleDownload = async (filePath: string, fileLabel: string) => {
     console.log(`${fileLabel} file path: `, filePath);
     if (filePath) {
-      const downloadUrl = `http://176.111.218.197:5001${filePath}`;
+      const downloadUrl = `https://176.111.218.197:5001${filePath}`;
       console.log("Download link: ", downloadUrl);
 
       // Fetch the file as a Blob
