@@ -5,7 +5,10 @@ const FileUpload: React.FC = () => {
   const [fileName, setFileName] = useState<string>("");
   const [message, setMessage] = useState<string>("");
   const [processing, setProcessing] = useState<boolean>(false);
-  const [filePath, setFilePath] = useState<string>("");
+  const [filePaths, setFilePaths] = useState<{
+    new: string;
+    duplicate: string;
+  } | null>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -29,16 +32,16 @@ const FileUpload: React.FC = () => {
         );
 
         // Extract response data
-        const { message, file: filePath } = response.data;
+        const { message, files } = response.data; // Expecting { message, files: { new: filePath, duplicate: filePath } }
 
         console.log("Backend Response - Message:", message);
-        console.log("File Path:", filePath); // Verify this file path
+        console.log("File Paths:", files); // Verify this file path object
 
         // Update the frontend message
         setMessage(message);
-        setFilePath(filePath);
+        setFilePaths(files);
 
-        if (!filePath) {
+        if (!files?.new && !files?.duplicate) {
           setTimeout(() => {
             window.location.reload();
           }, 3000); // Adjust the time as needed
@@ -57,8 +60,8 @@ const FileUpload: React.FC = () => {
     }
   };
 
-  const handleDownload = async () => {
-    console.log("file path: ", filePath);
+  const handleDownload = async (filePath: string, fileLabel: string) => {
+    console.log(`${fileLabel} file path: `, filePath);
     if (filePath) {
       const downloadUrl = `http://localhost:5000${filePath}`;
       console.log("Download link: ", downloadUrl);
@@ -68,7 +71,8 @@ const FileUpload: React.FC = () => {
         const response = await fetch(downloadUrl);
         if (response.ok) {
           const blob = await response.blob();
-          const fileName = filePath.split("/").pop() || "processed_file.csv";
+          const fileName =
+            filePath.split("/").pop() || `${fileLabel}_processed_file.csv`;
 
           // Create a link element
           const link = document.createElement("a");
@@ -77,9 +81,8 @@ const FileUpload: React.FC = () => {
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          //setFilePath("\0");
 
-          window.location.reload();
+          //window.location.reload();
         } else {
           console.error("Failed to fetch the file");
         }
@@ -119,11 +122,20 @@ const FileUpload: React.FC = () => {
           )}
         </div>
 
-        {/* Conditional rendering of download button */}
-        {filePath && !processing && !message.includes("Error") && (
+        {/* Conditional rendering of download buttons for both new and duplicate files */}
+        {filePaths && !processing && !message.includes("Error") && (
           <div className="mt-4">
-            <button className="btn btn-success btn-lg" onClick={handleDownload}>
-              Download Processed File
+            <button
+              className="btn btn-success btn-lg me-3"
+              onClick={() => handleDownload(filePaths.new, "new")}
+            >
+              Download New Values File
+            </button>
+            <button
+              className="btn btn-info btn-lg"
+              onClick={() => handleDownload(filePaths.duplicate, "duplicate")}
+            >
+              Download Duplicate Values File
             </button>
           </div>
         )}
